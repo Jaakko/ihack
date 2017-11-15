@@ -16,19 +16,19 @@ app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 
 app.get('/building-info', function(req,res) {
 	var address = req.query.address; // $_GET["address"]
+	var city = req.query.city; // $_GET["city"]
 	var openstreetmap_api = 'http://nominatim.openstreetmap.org/search?street={+path}&format=json&polygon=1&addressdetails=1'
 	var vantaa_api = 'http://geoserver.hel.fi/geoserver/wfs?service=wfs&version=2.0.0&request=GetFeature&typeName=osm:van_rakennukset_dist&outputFormat=json&count=100&SRSNAME=EPSG:4326&BBOX={+bbox},EPSG:4326'
 	var r; 
-	const openstreetmap_api_uri = openstreetmap_api.replace('{+path}', address);
+	var openstreetmap_api_uri = openstreetmap_api.replace('{+path}', address)
+	if (city) openstreetmap_api_uri = openstreetmap_api_uri + "&city=" + city
 	console.log('uri', openstreetmap_api_uri)
 	//const work = BPromise.coroutine(function* (req,res) {
 	loadResource(openstreetmap_api_uri)
 		.then(function(body) {
 			r = body.parsed[0];
 			console.log('parsed', JSON.stringify(r));
-			//console.log('bbox', r.boundingbox);
-			const d = 0.005
-//			const vantaa_api_uri = vantaa_api.replace('{+bbox}', (parseFloat(r.boundingbox[2])-d )+','+(parseFloat(r.boundingbox[0])-d)+','+(parseFloat(r.boundingbox[3])+d)+','+(parseFloat(r.boundingbox[1])+d));
+			const d = 0.007
 			const vantaa_api_uri = vantaa_api.replace('{+bbox}', (parseFloat(r.lon)-d )+','+(parseFloat(r.lat)-d/2)+','+(parseFloat(r.lon)+d)+','+(parseFloat(r.lat)+d/2))
 			console.log('vantaa_uri', openstreetmap_api_uri)
 			loadResource(vantaa_api_uri)
@@ -47,7 +47,7 @@ app.get('/building-info', function(req,res) {
 						floors: '',
 						area_sqm:''
 					}
-					//r.features.forEach(function(feature) {
+
 					for (var j = 0; j < r.features.length; j++) {
 						var feature = r.features[j];
 						if (feature.properties) {						
@@ -67,6 +67,8 @@ app.get('/building-info', function(req,res) {
 							}
 						}
 					}
+					res.setHeader('Content-Type', 'application/json')
+					res.setHeader('Access-Control-Allow-Origin', '*')
 					res.status(200).send(response);
 				}
 			)
@@ -87,7 +89,6 @@ app.get('/building-info', function(req,res) {
 });
 
 function loadResource(source, headers = {'Accept': 'application/json'}) {
-  // Loading of JSON or YAML resource into a result object
   const result = {};
   console.log('loadResource', source)
   return new BPromise((resolve, reject) => {
