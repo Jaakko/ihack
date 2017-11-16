@@ -9,6 +9,8 @@ var qs = require('querystring'); // "querystring library
 var app = express();
 var port = 3000;
 
+var log = false
+var r; 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 	extended: true
@@ -19,26 +21,28 @@ app.get('/building-info', function(req,res) {
 	var city = req.query.city; // $_GET["city"]
 	var openstreetmap_api = 'http://nominatim.openstreetmap.org/search?street={+path}&format=json&polygon=1&addressdetails=1'
 	var vantaa_api = 'http://geoserver.hel.fi/geoserver/wfs?service=wfs&version=2.0.0&request=GetFeature&typeName=osm:van_rakennukset_dist&outputFormat=json&count=100&SRSNAME=EPSG:4326&BBOX={+bbox},EPSG:4326'
-	var r; 
+
 	var openstreetmap_api_uri = openstreetmap_api.replace('{+path}', address)
 	if (city) openstreetmap_api_uri = openstreetmap_api_uri + "&city=" + city
-	console.log('uri', openstreetmap_api_uri)
+	if (log) console.log('uri', openstreetmap_api_uri)
 	//const work = BPromise.coroutine(function* (req,res) {
 	loadResource(openstreetmap_api_uri)
 		.then(function(body) {
 			r = body.parsed[0];
-			console.log('parsed', JSON.stringify(r));
+			if (log) console.log('parsed', JSON.stringify(r));
 			const d = 0.007
 			const vantaa_api_uri = vantaa_api.replace('{+bbox}', (parseFloat(r.lon)-d )+','+(parseFloat(r.lat)-d/2)+','+(parseFloat(r.lon)+d)+','+(parseFloat(r.lat)+d/2))
-			console.log('vantaa_uri', openstreetmap_api_uri)
+			if (log) console.log('vantaa_uri', openstreetmap_api_uri)
 			loadResource(vantaa_api_uri)
 				.then(function(body) {
-					r = body.parsed;
-					console.log('parsed', JSON.stringify(r));
+					var wsf = body.parsed;
+					if (log) console.log('parsed', JSON.stringify(r));
 					var i = 0;
 					var response = {
 						id:'',
 						address: '',
+						lat: '',
+						lon: '',
 						building_type: '',
 						built_date: '',
 						building_material: '',
@@ -47,11 +51,14 @@ app.get('/building-info', function(req,res) {
 						floors: '',
 						area_sqm:''
 					}
-
-					for (var j = 0; j < r.features.length; j++) {
-						var feature = r.features[j];
+					if (r.lat) response.lat = r.lat
+					if (r.lon) response.lon = r.lon
+					if (address) response.address = address
+					
+					for (var j = 0; j < wsf.features.length; j++) {
+						var feature = wsf.features[j];
 						if (feature.properties) {						
-							console.log("Webhook received unknown event " + i + ": ", feature.properties.katuosoite_suomeksi);
+							if (log) console.log("Webhook received unknown event " + i + ": ", feature.properties.katuosoite_suomeksi);
 							i++;
 							if (feature.properties.katuosoite_suomeksi == address){
 								response.id = feature.properties.kiinteistotunnus
@@ -90,7 +97,7 @@ app.get('/building-info', function(req,res) {
 
 function loadResource(source, headers = {'Accept': 'application/json'}) {
   const result = {};
-  console.log('loadResource', source)
+  if (log) console.log('loadResource', source)
   return new BPromise((resolve, reject) => {
     request.getAsync({
       uri: source,
